@@ -9,16 +9,16 @@
 
 * `new WildRTC(ref,[options])`:
 
-** ref: Wilddog
-** options: Object
+*  ref: Wilddog
+*  options: Object
 
 * join(callback):
 
-** callback: function(Error)
+*  callback: function(Error)
 
 * leave(callback):
 
-** callback: function(Error)
+*  callback: function(Error)
 
 * getLocalMediaStream(callback)
 
