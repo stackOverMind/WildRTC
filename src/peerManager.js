@@ -1,6 +1,6 @@
 
 var webrtc = require('webrtcsupport');
-var Emitter = require('wildemitter');
+
 
 /*
 sample config
@@ -57,7 +57,7 @@ function PeerManager(ref,localId,config){
                 data = JSON.parse(snap.val()["data"]); 
             }
             catch (e){
-                
+                console.error(e);
             }
             if(data == null){
                 //TODO
@@ -78,8 +78,9 @@ function PeerManager(ref,localId,config){
         }
     },this);
 }
-Emitter.mixin(PeerManager);
-PeerManager.prototype.getPeer = function (remoteId,cb){
+
+PeerManager.prototype.getPeer = function (remoteId,callback,cancelcallback){
+    var self = this;
     var peer = this.peers[remoteId];
     if(peer == null){
         this.createPeer_(remoteId,true);
@@ -90,10 +91,34 @@ PeerManager.prototype.getPeer = function (remoteId,cb){
             peer.close();
             delete this.peers[remoteId];
             this.createPeer_(remoteId,true);
+            peer = this.peers[remoteId];
         }    
     }
-    cb(this.peers[remoteId]);
-    
+
+    function oniceconnectionstatechange(){
+        if(peer.iceConnectionState in ["connected","completed"]){
+                callback(this.peers[remoteId]);
+                
+                return true;
+        }
+        return false;            
+    }
+    if(!oniceconnectionstatechange()){
+        peer.addEventListener('iceconnectionstatechange',function(){
+            if(oniceconnectionstatechange()){
+                peer.removeEventListener("iceconnectionstatechange",oniceconnectionstatechange);    
+            }
+        });
+        setTimeout(function(){
+            peer.close();
+            delete self.peers[remoteId];
+            if(cancelcallback!=null){
+                
+                cancelcallback.call(self,new Error("Connection timeout"));
+                        
+            }
+        },20000);
+    } 
 }
 
 PeerManager.prototype.removePeer = function(remoteId){
@@ -102,11 +127,12 @@ PeerManager.prototype.removePeer = function(remoteId){
 PeerManager.prototype.createPeer_ = function(remoteId,isCaller){
     var self = this;
     var pc = new RTCPeerConnection(this.config.peerConnectionConfig,this.config.peerConnectionConstraints);
-    pc.onicecandidate = function(ev){
-        
-        var data = JSON.stringify(ev.candidate);
-        self.ref.push({"from":this.localId,"to":remoteId,"type":"candidate",data});
-    }
+    pc.addEventListener("icecandidate",
+        function(ev){  
+            var data = JSON.stringify(ev.candidate);
+            self.ref.push({"from":this.localId,"to":remoteId,"type":"candidate",data});
+        }   
+    ) 
     if(isCaller){
         pc.createOffer(function(desc){
             pc.setLocalDescription(desc);
@@ -131,3 +157,4 @@ PeerManager.prototype.removePeer_ = function(remoteId){
         delete this.peers[remoteId];
     }
 }
+module.exports = PeerManager;
