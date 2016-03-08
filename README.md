@@ -10,6 +10,7 @@
 * `new WildRTC(ref,[options])`:
 
 *  ref: Wilddog
+
 *  options: Object
 
 * join(callback):
