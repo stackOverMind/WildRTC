@@ -35,7 +35,7 @@ function PeerManager(ref,localId,config){
     this.ref = ref;
     this.localId = localId;
     //listen to messaged send to me
-    ref.orderByChild("to").equals(this.localId).on('child_added',function(snap){
+    ref.orderByChild("to").equalTo(this.localId).on('child_added',function(snap){
         if(snap != null&&snap.val()!=null){
             var from = snap.val()["from"];
            
@@ -130,20 +130,20 @@ PeerManager.prototype.createPeer_ = function(remoteId,isCaller){
     pc.addEventListener("icecandidate",
         function(ev){  
             var data = JSON.stringify(ev.candidate);
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"candidate",data});
+            self.ref.push({"from":self.localId,"to":remoteId,"type":"candidate",data});
         }   
     ) 
     if(isCaller){
         pc.createOffer(function(desc){
             pc.setLocalDescription(desc);
             //TODO send sdp
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"sdp",desc});
+            self.ref.push({"from":self.localId,"to":remoteId,"type":"sdp",desc});
         })
     }
     else{
         pc.createAnswer(pc.remoteDescription,function(desc){
             pc.setLocalDescription(desc);
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"sdp",desc});
+            self.ref.push({"from":self.localId,"to":remoteId,"type":"sdp",desc});
         })
     }
 

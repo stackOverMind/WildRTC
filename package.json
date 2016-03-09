@@ -21,5 +21,13 @@
   "bugs": {
     "url": "https://github.com/stackOverMind/WildRTC/issues"
   },
-  "homepage": "https://github.com/stackOverMind/WildRTC#readme"
+  "homepage": "https://github.com/stackOverMind/WildRTC#readme",
+  "devDependencies": {
+    "browser-sync": "^2.11.1",
+    "browserify": "^13.0.0",
+    "gulp": "^3.9.1"
+  },
+  "dependencies": {
+    "browser-sync": "^2.11.1"
+  }
 }
