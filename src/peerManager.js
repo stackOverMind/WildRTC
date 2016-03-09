@@ -35,8 +35,9 @@ function PeerManager(ref,localId,config){
     this.config = config;
     this.ref = ref;
     this.localId = localId;
+    this.signalRef = this.ref.child("signal")
     //listen to messaged send to me
-    ref.orderByChild("to").equals(this.localId).on('child_added',function(snap){
+    this.signalRef.orderByChild("to").equals(this.localId).on('child_added',function(snap){
         if(snap != null&&snap.val()!=null){
             var from = snap.val()["from"];
            
@@ -45,6 +46,7 @@ function PeerManager(ref,localId,config){
             //someone call me
             if(this.peers[from] == null){
                 this.createPeer_(from,false)
+                
             }
             //reconnect
             else if(this.peers[from].iceConnectionState in ["closed","disconnected","failed"]){
@@ -72,7 +74,7 @@ function PeerManager(ref,localId,config){
                 );
                 currentPc.createAnswer(currentPc.remoteDescription,function(desc){
                     currentPc.setLocalDescription(desc);
-                    this.ref.push({"from":this.localId,"to":remoteId,"type":"sdp-res","data":JSON.stringify(desc)});
+                    this.ref.push({"from":this.localId,"to":from,"type":"sdp-res","data":JSON.stringify(desc)});
                 })
             }
             else if(type == "candidate"){ 
@@ -87,6 +89,18 @@ function PeerManager(ref,localId,config){
 
 PeerManager.prototype.getPeer = function (remoteId,callback,cancelcallback){
     var self = this;
+    if(this.peers[remoteId]){
+        //存在
+        if(this.peers[remoteId].iceConnectionState in  ["closed","disconnected","failed"]){
+            //已经死了
+        }
+        
+        
+    }
+    else{
+        //不存在
+        
+    }
     var peer = this.peers[remoteId];
     if(peer == null){
         this.createPeer_(remoteId,true);
@@ -136,13 +150,13 @@ PeerManager.prototype.createPeer_ = function(remoteId,isCaller){
     pc.addEventListener("icecandidate",
         function(ev){  
             var data = JSON.stringify(ev.candidate);
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"candidate","data":data});
+            self.signalRef.push({"from":this.localId,"to":remoteId,"type":"candidate","data":data});
         }   
     ) 
     if(isCaller){
         pc.createOffer(function(desc){
             pc.setLocalDescription(desc);
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"sdp-req","data":JSON.stringify(desc)});
+            self.signalRef.push({"from":this.localId,"to":remoteId,"type":"sdp-req","data":JSON.stringify(desc)});
         })
     }
     this.peers[remoteId] = pc;
