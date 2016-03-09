@@ -31,6 +31,7 @@ sample config
 */
 function PeerManager(ref,localId,config){
     this.peers = {};
+    this.connecting = {};
     this.config = config;
     this.ref = ref;
     this.localId = localId;
@@ -45,6 +46,7 @@ function PeerManager(ref,localId,config){
             if(this.peers[from] == null){
                 this.createPeer_(from,false)
             }
+            //reconnect
             else if(this.peers[from].iceConnectionState in ["closed","disconnected","failed"]){
                 this.peers[from].close();
                 delete this.peers[from];
@@ -64,10 +66,14 @@ function PeerManager(ref,localId,config){
                 return;
                 
             }
-            if(type == "sdp"){
+            if(type == "sdp-req"){
                 currentPc.setRemoteDescription(
                     new RTCSessionDescription(data)
                 );
+                currentPc.createAnswer(currentPc.remoteDescription,function(desc){
+                    currentPc.setLocalDescription(desc);
+                    this.ref.push({"from":this.localId,"to":remoteId,"type":"sdp-res","data":JSON.stringify(desc)});
+                })
             }
             else if(type == "candidate"){ 
                 currentPc.addIceCandidate(new RTCIceCandidate(data));
@@ -130,23 +136,15 @@ PeerManager.prototype.createPeer_ = function(remoteId,isCaller){
     pc.addEventListener("icecandidate",
         function(ev){  
             var data = JSON.stringify(ev.candidate);
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"candidate",data});
+            self.ref.push({"from":this.localId,"to":remoteId,"type":"candidate","data":data});
         }   
     ) 
     if(isCaller){
         pc.createOffer(function(desc){
             pc.setLocalDescription(desc);
-            //TODO send sdp
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"sdp",desc});
+            self.ref.push({"from":this.localId,"to":remoteId,"type":"sdp-req","data":JSON.stringify(desc)});
         })
     }
-    else{
-        pc.createAnswer(pc.remoteDescription,function(desc){
-            pc.setLocalDescription(desc);
-            self.ref.push({"from":this.localId,"to":remoteId,"type":"sdp",desc});
-        })
-    }
-
     this.peers[remoteId] = pc;
     
 }
@@ -157,4 +155,5 @@ PeerManager.prototype.removePeer_ = function(remoteId){
         delete this.peers[remoteId];
     }
 }
+
 module.exports = PeerManager;
