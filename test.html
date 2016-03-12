@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>OpenWebRTC Demo</title>
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width">
+    <script src="https://cdn.wilddog.com/js/client/current/wilddog.js"></script>
+    <script src="./lib/WildRTC.js"></script>
+</head>
+
+<body>
+    <header>
+        <div id="heading">
+            <h2>Simple WebRTC Example</h2>
+        </div>
+        <div id="owr-logo"></div>
+    </header>
+    <section id="main-section">
+        <div id="video-container">
+            <video id="self_view" class="shadow" autoplay="true" muted></video>
+        </div>
+        <div id="video-container1">
+            <video id="remote_view" class="shadow" autoplay="true" muted></video>
+        </div>
+    </section>
+    <footer>
+        Copyright Ericsson Research 2016
+    </footer>
+    <script>
+    var ref = new Wilddog("https://<APPID>.wilddogio.com/rtc");
+    if (ref.getAuth() == null) {
+        ref.authAnonymously(function() {});
+    }
+    ref.onAuth(function(auth) {
+        if (auth != null) {
+            var rtc = new WildRTC(ref);
+
+            rtc.join(function() {
+                rtc.setLocalStream(null, function(wildStream) {
+                    wildStream.bindToDOM('self_view');
+                    rtc.addStream(wildStream, function(err) {
+                        console.log(err);
+                    });
+                }, function(err) {
+                    console.error(err);
+                });
+
+            })
+
+            rtc.on('stream_added', function(wildStream) {
+                console.log('remoteView');
+                wildStream.bindToDOM('remote_view');
+            })
+        }
+    })
+    </script>
+</body>
+
+</html>

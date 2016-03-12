@@ -7,6 +7,10 @@ WildStream.prototype.getId = function() {
     return this.uId;
 };
 
+WildStream.prototype.getStream = function(){
+	return this.stream;
+}
+
 WildStream.prototype.setStream = function(stream) {
     this.stream = stream;
 };

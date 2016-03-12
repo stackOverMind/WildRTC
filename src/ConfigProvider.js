@@ -4,6 +4,7 @@ var ConfigProvider = function(ref) {
 
 ConfigProvider.prototype.getConfig = function(callback) {
     var token = ref.getAuth().token;
+    console.log(token);
     var req = new XMLHttpRequest();
 
     req.open('GET', 'https://auth.wilddog.com/v1/webrtc/users/webrtc/secret?token=' + token, false);

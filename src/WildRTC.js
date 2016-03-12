@@ -1,89 +1,105 @@
 var ConfigProvider = require('./ConfigProvider').ConfigProvider;
-var PeerManager = require('./peerManager');
+var PeerConnection = require('wild-peerconnection');
 var WildStream = require('./WildStream');
 var WildData = require('./WildData');
 var events = require('events');
 
-var isMozilla = window.mozRTCPeerConnection && !window.webkitRTCPeerConnection;
-if (isMozilla) {
-    window.URL = window.URL;
-    navigator.GetUserMedia = navigator.mozGetUserMedia;
-    window.RTCPeerConnection = window.mozRTCPeerConnection;
-    window.RTCSessionDescription = window.mozRTCSessionDescription;
-    window.RTCIceCandidate = window.mozRTCIceCandidate;
-}
-
-var isChrome = window.webkitRTCPeerConnection && !window.mozRTCPeerConnection;
-if (isChrome) {
-    window.URL = window.URL;
-    navigator.GetUserMedia = navigator.webkitGetUserMedia;
-    window.RTCPeerConnection = window.webkitRTCPeerConnection;
-    window.RTCSessionDescription = window.RTCSessionDescription;
-    window.RTCIceCandidate = window.RTCIceCandidate;
-}
-
-var WildRTC = function(ref) {
-    this.WildEmitter = new events.EventEmitter();
+var WildRTC = function(ref, callback) {
+    this.wildEmitter = new events.EventEmitter();
     this.uid = ref.getAuth().uid;
     this.ref = ref;
-    this.peerList = {};
-    this.peerManager = null;
+    this.localStream = null;
+    this.isAddStream = false;
+    this.hasStreamList = {};
+    this.noStreamList = {};
+    this.receivePeerList = {};
+    this.sendPeerConnection = null;
+    this.receivePeerConnection = null;
+
 }
 
 window.WildRTC = WildRTC;
-
 WildRTC.prototype.join = function(callback) {
     var configProvider = new ConfigProvider(this.ref);
     var wildData = new WildData(this.ref);
     var self = this;
-    wildData.join(this.uid, function(err) {
+    wildData.join(self.uid, function(err) {
         if (err != null) {
             callback(err);
         }
-    });
-    configProvider.getConfig(function(configuration) {
-        self.peerManager = new PeerManager(this.ref, self.uid, configuration);
-        wildData.onUserAdd(function(remoteId) {
-            self.peerManager.getPeer(remoteId, function(peer) {
-
-                peer.onaddstream = function(evt) {
+        configProvider.getConfig(function(configuration) {
+            wildData.onUserAdd(self.uid, function(remoteId) {
+                var localSendRef = self.ref.child('users/' + self.uid + '/send/' + remoteId);
+                var remoteReceiveRef = self.ref.child('users/' + remoteId + '/receive/' + self.uid);
+                var localReceiveRef = self.ref.child('users/' + self.uid + '/receive/' + remoteId);
+                var remoteSendRef = self.ref.child('users/' + remoteId + '/send/' + self.uid);
+                self.sendPeerConnection = new PeerConnection(localSendRef, remoteReceiveRef, configuration);
+                self.receivePeerConnection = new PeerConnection(localReceiveRef, remoteSendRef, configuration);
+                self.receivePeerList[remoteId] = self.receivePeerConnection;
+                if (self.isAddStream) {
+                    if (self.localStream != null) {
+                        self.sendPeerConnection.addStream(self.localStream, function(err) {
+                            callback(err);
+                        })
+                    } else {
+                        self.setLocalStream(null, function(wildStream) {
+                            self.sendPeerConnection.addStream(wildStream.getStream(), function(err) {
+                                callback(err);
+                            })
+                        })
+                    }
+                    self.hasStreamList[remoteId] = self.sendPeerConnection;
+                } else {
+                    self.noStreamList[remoteId] = self.sendPeerConnection;
+                }
+                self.receivePeerConnection.on('addstream', function(stream) {
                     var wildStream = new WildStream(remoteId);
-                    wildStream.setStream(evt.stream);
-                    self.WildEmitter.emit('stream_added', wildStream);
+                    wildStream.setStream(stream);
+                    self.wildEmitter.emit('stream_added', wildStream);
+                });
+                self.receivePeerConnection.on('removestream', function() {
+                    self.wildEmitter.emit('stream_removed', remoteId);
+                });
+            });
+            wildData.onUserRemoved(self.uid, function(remoteId) {
+                if (self.hasStreamList[remoteId]) {
+                    self.hasStreamList[remoteId].close();
+                    delete self.hasStreamList[remoteId];
+                } else if (self.noStreamList[remoteId]) {
+                    self.noStreamList[remoteId].close();
+                    delete self.noStreamList[remoteId];
                 };
-                peer.onremovestream = function(evt) {
-                    self.WildEmitter.emit('stream_removed', remoteId);
-                };
-            })
+                self.receivePeerList[remoteId].close();
+            });
+            callback();
         });
-        wildData.onUserRemoved(function(remoteId) {
-            self.peerManager.removePeer(remoteId);
-        })
-        callback();
     });
-};
+
+}
 
 WildRTC.prototype.leave = function() {
     var wildData = new WildData(this.ref);
-    wildData.leave(uid);
+    wildData.leave(this.uid);
 };
 
-WildRTC.prototype.getLocalStream = function(options, callback, cancelCallback) {
-    if (options !=null) {
-        navigator.GetUserMedia(options, function(stream) {
+WildRTC.prototype.setLocalStream = function(options, callback, cancelCallback) {
+    if (options != null) {
+        navigator.getUserMedia(options, function(stream) {
             var wildStream = new WildStream(this.uid);
-            wildStream[stream] = stream;
+            wildStream.setStream(stream);
+            this.localStream = wildStream;
             callback(wildStream);
         }, function(err) {
             cancelCallback(err);
         })
     } else {
-        navigator.GetUserMedia({
+        navigator.getUserMedia({
             'audio': true,
             'video': true
         }, function(stream) {
             var wildStream = new WildStream(this.uid);
             wildStream.setStream(stream);
+            this.localStream = wildStream;
             callback(wildStream);
         }, function(err) {
             cancelCallback(err);
@@ -92,24 +108,26 @@ WildRTC.prototype.getLocalStream = function(options, callback, cancelCallback) {
 
 };
 
-WildRTC.prototype.addStream = function(WildStream, callback) {
-    var stream = WildStream[stream]
-    for (var peer in this.peerList) {
-        peer.addStream(stream, function(err) {
-            if (err) {
-                callback(err);
+WildRTC.prototype.addStream = function(callback) {
+    var self = this;
+    self.isAddStream = true;
+    for (var peer in self.noStreamList) {
+        self.noStreamList[peer].addStream(self.localStream, function(err) {
+            if (!err) {
+                self.hasStreamList[peer] = self.noStreamList[peer];
+                delete self.noStreamList[peer];
             }
+            callback(err);
         })
     }
 };
 
 WildRTC.prototype.removeStream = function() {
-    for (var peer in this.peerList) {
-        peer.removeStream(stream, function(err) {
-            if (err) {
-                callback(err);
-            }
-        })
+    this.isAddStream = false;
+    for (var peer in this.hasStreamList) {
+        this.hasStreamList[peer].close();
+        this.noStreamList[peer] = this.hasStreamList[peer];
+        delete this.hasStreamList[peer];
     }
 };
 
@@ -117,12 +135,15 @@ WildRTC.prototype.on = function(string, callback, cancelCallback) {
     if (string != 'stream_added' && string != 'stream_removed') {
         cancelCallback();
     } else if (string == 'stream_added') {
-        this.WildEmitter.on('stream_added', callback);
+        this.wildEmitter.on('stream_added', callback);
     } else if (string == 'stream_removed') {
-        this.WildEmitter.on('stream_removed', callback);
+        this.wildEmitter.on('stream_removed', callback);
     }
 };
 
 WildRTC.prototype.off = function(string) {
-    this.WildEmitter.off(string);
+
+    if (string == 'stream_added' || string == 'stream_removed') {
+        this.WildEmitter.off(string);
+    }
 };
