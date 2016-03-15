@@ -4,7 +4,7 @@ var WildData = function(ref) {
 }
 
 WildData.prototype.onUserAdd = function(uid, callback) {
-    ref.child('users').on('child_added', function(snap) {
+    this.ref.child('users').on('child_added', function(snap) {
         if (snap.key() != uid) {
 
             callback(snap.key());
@@ -13,9 +13,9 @@ WildData.prototype.onUserAdd = function(uid, callback) {
 };
 
 WildData.prototype.onUserRemoved = function(uid, callback) {
-    ref.child('users').on('child_removed', function(snap) {
-        ref.child('users/' + uid + '/send/' + snap.key()).remove();
-        ref.child('users/' + uid + '/receive/' + snap.key()).remove();
+    this.ref.child('users').on('child_removed', function(snap) {
+        this.ref.child('users/' + uid + '/send/' + snap.key()).remove();
+        this.ref.child('users/' + uid + '/receive/' + snap.key()).remove();
         callback(snap.key());
     });
 };
@@ -27,8 +27,8 @@ WildData.prototype.onUserRemoved = function(uid, callback) {
 // };
 
 WildData.prototype.join = function(uid, callback) {
-    ref.child('users/' + uid).onDisconnect().remove();
-    ref.child('users/' + uid).update({ 'state': 'created' }, function(err) {
+    this.ref.child('users/' + uid).onDisconnect().remove();
+    this.ref.child('users/' + uid).update({ 'state': 'created' }, function(err) {
         if (err == null) {
             callback();
         } else {
@@ -38,11 +38,17 @@ WildData.prototype.join = function(uid, callback) {
 };
 
 WildData.prototype.leave = function(uid) {
-    ref.child('users').off('child_added');
-    ref.child('users').off('child_removed');
+    this.ref.child('users').off('child_added');
+    this.ref.child('users').off('child_removed');
     // ref.child('userStates').off('child_changed');
-    ref.child('users/' + uid).remove();
+    this.ref.child('users/' + uid).remove();
     // ref.child('userStates/' + uid).remove();
+}
+
+WildData.prototype.onceKey = function(remoteid, callback) {
+    this.ref.child('keys/' + remoteid).once('value',function(data){
+        callback(data.val());
+    })
 }
 
 module.exports = WildData;
